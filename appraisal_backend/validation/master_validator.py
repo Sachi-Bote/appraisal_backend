@@ -11,7 +11,6 @@ from .teaching_rules import validate_teaching_input
 from .activity_rules import validate_activities
 from .research_rules import validate_research_payload
 from .pbas_rules import validate_pbas_scores
-from .workflow_rules import validate_role_for_action
 
 # Top-level required keys for a single appraisal submission payload
 TOP_LEVEL_REQUIRED = {"faculty_id", "year", "teaching", "activities", "research", "pbas", "submit_action", "role"}
