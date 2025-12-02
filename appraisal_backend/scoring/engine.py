@@ -32,6 +32,7 @@ def calculate_full_score(payload: dict) -> dict:
         "activities": activity_result,
         "research": research_result,
         "pbas": pbas_result,
+<<<<<<< HEAD
         "total_score": total_score,
     }
 
@@ -149,3 +150,7 @@ def pedagogy_creation(
             score += 5
 
     return score
+=======
+        "total_score": total_score
+    }
+>>>>>>> eafc920effbd176296fb095d491741a0552d7c42
