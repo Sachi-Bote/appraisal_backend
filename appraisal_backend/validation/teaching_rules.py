@@ -1,11 +1,23 @@
-#these rules are meant for the table 1 in the appraisal form 
+from typing import Dict, Tuple
+from .global_rules import is_non_negative_int, validated_required_fields
 
-def teaching_input(data):
-    if data["classes_taught"] > data["assigned_classes"]:  
-        return False, "Error: Classes taught cannot exceed total classes."
-    
-    if data["assigned_classes"] <= 0:
-        return False, "Error: Assigned classes must be greater than zero."
-    
-    return True, None
+REQUIRED_FIELDS = ["total_class_assigned", "classes_taught"]
 
+def validate_teaching_input(payload: Dict) -> Tuple[bool, str]:
+    ok, err = validated_required_fields(payload, REQUIRED_FIELDS)
+    if not ok:
+        return False, err
+    
+    total = payload["total_class_assigned"]
+    taught = payload["classes_taught"]
+
+    if not is_non_negative_int(total) or not is_non_negative_int(taught):
+        return False, "Both 'total_class_assigned' and 'classes_taught' must be non-negative integers"
+    
+    if total == 0:
+        return False, "'total_class_assigned' must be greater than zero"
+    
+    if taught > total:
+        return False, "'classes_taught' cannot be greater than 'total_class_assigned'"
+    
+    return True, ""
