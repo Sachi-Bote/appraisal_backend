@@ -112,7 +112,17 @@ class FacultyAppraisalStatusAPI(APIView):
         appraisals = (
             Appraisal.objects
             .filter(faculty=faculty)
-            .only("appraisal_id", "academic_year", "created_at", "remarks", "status", "updated_at")
+            .select_related("appraisalscore")
+            .only(
+                "appraisal_id",
+                "academic_year",
+                "created_at",
+                "remarks",
+                "status",
+                "updated_at",
+                "appraisalscore__total_score",
+                "appraisalscore__verified_grade",
+            )
             .order_by("-updated_at")
         )
         query_ms = (perf_counter() - query_started) * 1000
@@ -123,12 +133,19 @@ class FacultyAppraisalStatusAPI(APIView):
 
         classify_started = perf_counter()
         for a in appraisals:
+            appraisal_score = getattr(a, "appraisalscore", None)
+            calculated_total_score = (
+                float(appraisal_score.total_score)
+                if appraisal_score and appraisal_score.total_score is not None
+                else None
+            )
             base_data = {
                 "id": a.appraisal_id,
                 "academic_year": a.academic_year,
                 "submitted_date": a.created_at.strftime("%d %b %Y"),
                 "remarks": a.remarks,
                 "workflow_state": a.status,
+                "calculated_total_score": calculated_total_score,
             }
 
             # UNDER REVIEW STATES

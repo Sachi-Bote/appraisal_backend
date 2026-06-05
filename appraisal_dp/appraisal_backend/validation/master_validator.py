@@ -148,8 +148,19 @@ def validate_full_form(payload: Dict, meta: Dict) -> Tuple[bool, str]:
     # ---------- SANITY CHECK ----------
     research_sum = sum(int(v) for v in payload["research"].values() if isinstance(v, int))
     activity_sum = sum(1 for yes in derive_activity_flags(payload["activities"]).values() if yes)
+    pbas = payload.get("pbas", {}) if isinstance(payload.get("pbas"), dict) else {}
+    pbas_score_sum = sum(
+        float(pbas.get(key) or 0)
+        for key in ("teaching_process_score", "feedback", "student_feedback_score", "department", "department_score", "institute", "institute_score", "acr", "acr_score", "society", "society_score")
+        if isinstance(pbas.get(key), (int, float))
+    )
+    pbas_entry_count = sum(
+        len(pbas.get(key) or [])
+        for key in ("student_feedback", "departmental_activities", "institute_activities", "society_activities", "teaching_process")
+        if isinstance(pbas.get(key), list)
+    )
 
-    if research_sum == 0 and activity_sum == 0:
+    if research_sum == 0 and activity_sum == 0 and pbas_score_sum == 0 and pbas_entry_count == 0:
         return False, "Submission appears empty: no research or activities."
 
     return True, ""

@@ -33,7 +33,8 @@ def calculate_pbas_score(appraisal_data: dict) -> dict:
                 "title": paper.get("title", ""),
                 "impact_factor_category": scored["impact_factor_category"],
                 "author_category": scored["author_category"],
-                "base_points": scored["base_points"],
+                "impact_points": scored["impact_points"],
+                "author_contribution": scored["author_contribution"],
                 "share": scored["share"],
                 "awarded_score": scored["awarded_score"],
             })

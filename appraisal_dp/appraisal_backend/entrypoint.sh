@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
+
 set -o errexit
 
 echo "Waiting for database..."
+
 python - <<'PY'
 import os
 import sys
@@ -27,6 +29,7 @@ for attempt in range(1, 31):
         conn.close()
         print("Database is ready")
         sys.exit(0)
+
     except Exception as exc:
         print(f"DB not ready (attempt {attempt}/30): {exc}")
         time.sleep(2)
@@ -36,38 +39,46 @@ sys.exit(1)
 PY
 
 echo "Running migrations..."
-python manage.py migrate
+python manage.py migrate --noinput
+
+echo "Collecting static files..."
+python manage.py collectstatic --noinput
 
 echo "Bootstrapping admin..."
-python manage.py shell -c "
+
+python manage.py shell <<'PY'
 import os
 from core.models import User
 
-username = os.getenv('BOOTSTRAP_ADMIN_USERNAME')
-password = os.getenv('BOOTSTRAP_ADMIN_PASSWORD')
-email = os.getenv('BOOTSTRAP_ADMIN_EMAIL') or username
+username = os.getenv("BOOTSTRAP_ADMIN_USERNAME")
+password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD")
+email = os.getenv("BOOTSTRAP_ADMIN_EMAIL") or username
 
 if username and password:
     user, created = User.objects.get_or_create(
         username=username,
         defaults={
-            'email': email,
-            'role': 'ADMIN',
-            'is_active': True,
-            'is_staff': True,
-            'is_superuser': True,
+            "email": email,
+            "role": "ADMIN",
+            "is_active": True,
+            "is_staff": True,
+            "is_superuser": True,
         },
     )
+
     user.set_password(password)
     user.is_staff = True
     user.is_superuser = True
     user.is_active = True
-    user.role = 'ADMIN'
+    user.role = "ADMIN"
     user.save()
-    print(f'Admin ready: {username}')
+
+    print(f"Admin ready: {username}")
+
 else:
-    print('Admin bootstrap skipped')
-"
+    print("Admin bootstrap skipped")
+PY
 
 echo "Starting Gunicorn..."
+
 exec gunicorn appraisal_backend.wsgi:application --bind 0.0.0.0:8000

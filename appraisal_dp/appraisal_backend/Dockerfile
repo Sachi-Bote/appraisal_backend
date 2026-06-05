@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# System deps for Playwright
+# System dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
@@ -31,21 +31,35 @@ RUN apt-get update && apt-get install -y \
     libgbm1 \
     libasound2 \
     libxshmfence1 \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy requirements
 COPY requirements.txt .
+
+# Install Python packages
 RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browser
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN python -m playwright install chromium
 
+# Copy project
 COPY . .
 
-RUN python manage.py collectstatic --noinput
+# Django settings
+ENV DJANGO_SETTINGS_MODULE=appraisal_backend.settings
 
+# Collect static files
+RUN python manage.py collectstatic --noinput || true
+
+# Expose backend port
+EXPOSE 8000
+
+# Entrypoint
 COPY entrypoint.sh /entrypoint.sh
+
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -257,12 +257,30 @@ def get_enhanced_pbas_pdf_data(appraisal: Appraisal) -> Dict:
     except Exception:
         pass
 
-    teaching_score = float(calculated_scores.get("teaching", {}).get("score", 0))
-    student_feedback_score = float(calculated_scores.get("student_feedback", {}).get("score", 0))
-    departmental_score = float(calculated_scores.get("departmental_activities", {}).get("total_awarded", 0))
-    institute_score = float(calculated_scores.get("institute_activities", {}).get("total_awarded", 0))
-    society_score = float(calculated_scores.get("society_activities", {}).get("total_awarded", 0))
-    acr_score_value = float(calculated_scores.get("acr", {}).get("credit_point", 0))
+    teaching_score = _to_float(
+        calculated_scores.get("teaching", {}).get("score"),
+        _get_first(pbas, ["teaching_process_score"], 0),
+    )
+    student_feedback_score = _to_float(
+        calculated_scores.get("student_feedback", {}).get("score"),
+        _get_first(pbas, ["student_feedback_score", "feedback"], 0),
+    )
+    departmental_score = _to_float(
+        calculated_scores.get("departmental_activities", {}).get("total_awarded"),
+        _get_first(pbas, ["department_score", "department", "departmental"], 0),
+    )
+    institute_score = _to_float(
+        calculated_scores.get("institute_activities", {}).get("total_awarded"),
+        _get_first(pbas, ["institute_score", "institute"], 0),
+    )
+    society_score = _to_float(
+        calculated_scores.get("society_activities", {}).get("total_awarded"),
+        _get_first(pbas, ["society_score", "society"], 0),
+    )
+    acr_score_value = _to_float(
+        calculated_scores.get("acr", {}).get("credit_point"),
+        _get_first(pbas, ["acr_score", "acr"], 0),
+    )
     total_360_score = round(
         teaching_score
         + student_feedback_score
@@ -328,10 +346,10 @@ def get_enhanced_pbas_pdf_data(appraisal: Appraisal) -> Dict:
         "pbas_section_scores": {
             "teaching_process": teaching_section_score,
             "feedback": _to_float(_get_first(pbas, ["feedback", "student_feedback_score"]), 0),
-            "department": _to_float(_get_first(pbas, ["department", "departmental"]), 0),
-            "institute": _to_float(_get_first(pbas, ["institute"]), 0),
-            "society": _to_float(_get_first(pbas, ["society"]), 0),
-            "acr": acr_score,
+            "department": _to_float(_get_first(pbas, ["department_score", "department", "departmental"]), 0),
+            "institute": _to_float(_get_first(pbas, ["institute_score", "institute"]), 0),
+            "society": _to_float(_get_first(pbas, ["society_score", "society"]), 0),
+            "acr": _to_float(_get_first(pbas, ["acr_score", "acr"]), acr_score),
         },
         "scores": {
             "overall_grade": overall_grade,

@@ -135,6 +135,14 @@ class MeView(APIView):
         assessment_period = _parse_optional_date(request.data.get("assessment_period"))
         date_of_joining = _parse_optional_date(request.data.get("date_of_joining"))
 
+        if mobile_number is not None:
+            mobile_number = str(mobile_number).strip()
+            if mobile_number and (not mobile_number.isdigit() or len(mobile_number) > 10):
+                return Response(
+                    {"detail": "Mobile number must contain at most 10 digits."},
+                    status=400,
+                )
+
         if profile is not None:
             if full_name is not None:
                 profile.full_name = full_name

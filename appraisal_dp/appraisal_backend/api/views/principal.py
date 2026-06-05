@@ -191,7 +191,7 @@ class PrincipalAppraisalList(APIView):
                 ]) |
                 Q(status=States.SUBMITTED, is_hod_appraisal=True)
             )
-            .select_related("faculty__user")
+            .select_related("faculty__user", "appraisalscore")
             .order_by("-updated_at")
         )
 
@@ -200,6 +200,12 @@ class PrincipalAppraisalList(APIView):
         for a in appraisals:
             faculty = a.faculty
             user = faculty.user if faculty else None
+            appraisal_score = getattr(a, "appraisalscore", None)
+            calculated_total_score = (
+                float(appraisal_score.total_score)
+                if appraisal_score and appraisal_score.total_score is not None
+                else None
+            )
 
             response_data.append({
                 "id": a.appraisal_id,
@@ -215,6 +221,7 @@ class PrincipalAppraisalList(APIView):
                 "status": a.status,
                 "remarks": a.remarks,
                 "is_hod_appraisal": a.is_hod_appraisal,
+                "calculated_total_score": calculated_total_score,
             })
 
 

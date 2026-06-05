@@ -1254,6 +1254,7 @@ export default function FacultyAppraisalForm() {
       0
     );
     const mappedBuckets = deriveBucketsFromStep2B();
+    const pbasScoreValues = buildPBASScores();
 
     return {
       academic_year: generalInfo.academicYear,
@@ -1317,9 +1318,15 @@ export default function FacultyAppraisalForm() {
 
         // ✅ PBAS BLOCK
         pbas: {
-          ...buildPBASScores(),
+          ...pbasScoreValues,
           ...buildPBASCounts(),
           justification: justification,
+          teaching_process_score: pbasScoreValues.teaching_process,
+          student_feedback_score: pbasScoreValues.feedback,
+          department_score: pbasScoreValues.department,
+          institute_score: pbasScoreValues.institute,
+          society_score: pbasScoreValues.society,
+          acr_score: pbasScoreValues.acr,
 
           teaching_process: teachingActivities.map(t => {
             const assigned = Number(t.totalClassesAssigned || 0);

@@ -194,6 +194,12 @@ export default function Profile() {
   };
 
   const saveProfile = async () => {
+    const mobile = String(editData.mobile_number || "").trim();
+    if (mobile && !/^\d{1,10}$/.test(mobile)) {
+      alert("Mobile number must contain at most 10 digits.");
+      return;
+    }
+
     try {
       const payload = {};
       [
@@ -420,9 +426,16 @@ export default function Profile() {
                               ) : (
                                 <input
                                   name={field}
-                                  type={isDate ? "date" : "text"}
+                                  type={isDate ? "date" : field === "mobile_number" ? "tel" : "text"}
                                   value={value}
-                                  onChange={(e) => setEditData((prev) => ({ ...prev, [field]: e.target.value }))}
+                                  onChange={(e) => {
+                                    const nextValue = field === "mobile_number"
+                                      ? e.target.value.replace(/\D/g, "").slice(0, 10)
+                                      : e.target.value;
+                                    setEditData((prev) => ({ ...prev, [field]: nextValue }));
+                                  }}
+                                  maxLength={field === "mobile_number" ? 10 : undefined}
+                                  inputMode={field === "mobile_number" ? "numeric" : undefined}
                                   disabled={isReadOnly}
                                   className="profile-input"
                                 />

@@ -71,7 +71,8 @@ class FacultySubmitAPI(APIView):
             faculty=faculty,
             academic_year=meta["academic_year"],
             semester=meta["semester"],
-            form_type=meta["form_type"]
+            form_type=meta["form_type"],
+            is_hod_appraisal=False
         ).first()
 
         if existing_appraisal:
@@ -140,14 +141,16 @@ class FacultySubmitAPI(APIView):
             appraisal.save()
 
             # 8️⃣ CREATE SCORE
-            AppraisalScore.objects.create(
+            AppraisalScore.objects.update_or_create(
                 appraisal=appraisal,
-                teaching_score=score_result["teaching"]["score"],
-                research_score=score_result["research"]["total"],
-                activity_score=score_result["activities"]["score"],
-                feedback_score=score_result["pbas"]["total"],
-                total_score=score_result["total_score"],
-                acr_score = score_result["acr"]["credit_point"]
+                defaults={
+                    "teaching_score": score_result["teaching"]["score"],
+                    "research_score": score_result["research"]["total"],
+                    "activity_score": score_result["activities"]["score"],
+                    "feedback_score": score_result["pbas"]["total"],
+                    "total_score": score_result["total_score"],
+                    "acr_score": score_result["acr"]["credit_point"],
+                }
             )
 
             log_action(

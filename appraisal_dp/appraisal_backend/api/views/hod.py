@@ -115,13 +115,16 @@ class HODSubmitAPI(APIView):
             )
             appraisal.save()
 
-            AppraisalScore.objects.create(
+            AppraisalScore.objects.update_or_create(
                 appraisal=appraisal,
-                teaching_score=score_result["teaching"]["score"],
-                research_score=score_result["research"]["total"],
-                activity_score=score_result["activities"]["score"],
-                feedback_score=score_result["pbas"]["total"],
-                total_score=score_result["total_score"]
+                defaults={
+                    "teaching_score": score_result["teaching"]["score"],
+                    "research_score": score_result["research"]["total"],
+                    "activity_score": score_result["activities"]["score"],
+                    "feedback_score": score_result["pbas"]["total"],
+                    "total_score": score_result["total_score"],
+                    "acr_score": score_result["acr"]["credit_point"],
+                }
             )
 
             log_action(
