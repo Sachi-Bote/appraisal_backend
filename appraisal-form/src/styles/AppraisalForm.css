@@ -182,6 +182,164 @@ label,
   margin-left: 2px;
 }
 
+.appraisal-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #1a1a1a;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 9999;
+  animation: toast-in 0.2s ease;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.profile-confirm-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 18px;
+}
+
+.profile-confirm-banner {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.profile-confirm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.confirm-field {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.confirm-label,
+.confirm-value {
+  display: block;
+}
+
+.confirm-label {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.confirm-value {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.activity-search-picker {
+  position: relative;
+  width: 100%;
+}
+
+.activity-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
+  z-index: 100;
+  max-height: 280px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.activity-search-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.activity-search-option:hover {
+  background: var(--hover-bg, #f5f5f5);
+}
+
+.activity-search-label {
+  min-width: 0;
+}
+
+.activity-scope-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
+.scope-departmental { background: #e8f4fd; color: #1565c0; }
+.scope-institute { background: #fef3e2; color: #b45309; }
+.scope-society { background: #e8f5e9; color: #2e7d32; }
+
+.research-section-wrap {
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.research-section-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--surface, #fafafa);
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.research-section-toggle:hover {
+  background: var(--hover-bg, #f0f0f0);
+}
+
+.research-section-meta {
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  margin-right: auto;
+  margin-left: 12px;
+}
+
+.research-toggle-icon {
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.research-section-body {
+  padding: 16px;
+}
+
 /* =====================================================
    INPUTS / SELECT / TEXTAREA - UNIFIED STYLE
 ===================================================== */

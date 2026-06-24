@@ -46,6 +46,13 @@ const toNumber = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const suggestGrade = (pct) => {
+  const n = Number(pct || 0);
+  if (n >= 80) return "Good";
+  if (n >= 70) return "Satisfactory";
+  return "Not Satisfactory";
+};
+
 const deriveSelfTeaching = (reviewData, appraisalData) => {
   if (reviewData?.table1_teaching) return reviewData.table1_teaching;
   const courses = appraisalData?.teaching?.courses || [];
@@ -102,6 +109,7 @@ export default function HODDashboard() {
     pending: [],
     processed: [],
   });
+  const [batchState, setBatchState] = useState({});
 
   /* ================= LOAD HOD SELF APPRAISAL ================= */
   useEffect(() => {
@@ -177,6 +185,19 @@ export default function HODDashboard() {
 
   /* ================= FETCH DETAILS FOR REVIEW ================= */
   useEffect(() => {
+    const init = {};
+    submissions.pending.forEach((sub) => {
+      const pct = sub.sppu_review_data?.table1_teaching?.percentage;
+      init[sub.appraisal_id] = {
+        teachingGrade: suggestGrade(pct),
+        activityGrade: sub.sppu_review_data?.table1_activities?.self_grade || "Good",
+        remarks: "",
+      };
+    });
+    setBatchState(init);
+  }, [submissions.pending]);
+
+  useEffect(() => {
     if (!selectedSubmission) return;
 
     const fetchDetails = async () => {
@@ -194,8 +215,20 @@ export default function HODDashboard() {
           : DEFAULT_TABLE2_VERIFIED_KEYS;
         setTable2FieldKeys(backendKeys);
         const grading = res.data?.verified_grading || {};
-        setTable1VerifiedTeaching(grading.table1_verified_teaching || "");
-        setTable1VerifiedActivities(grading.table1_verified_activities || "");
+        const appraisalData = res.data?.appraisal_data || {};
+        const courses = appraisalData?.teaching?.courses || [];
+        const totalAssigned = courses.reduce(
+          (sum, c) => sum + toNumber(c.total_classes_assigned ?? c.scheduled_classes),
+          0
+        );
+        const totalTaught = courses.reduce(
+          (sum, c) => sum + toNumber(c.classes_taught ?? c.held_classes),
+          0
+        );
+        const pct = totalAssigned > 0 ? (totalTaught / totalAssigned) * 100 : 0;
+        const selfActivities = res.data?.sppu_review_data?.table1_activities || {};
+        setTable1VerifiedTeaching(grading.table1_verified_teaching || suggestGrade(pct));
+        setTable1VerifiedActivities(grading.table1_verified_activities || selfActivities.self_grade || "Good");
         setTable2VerifiedScores(
           withAutoTable2Total({
             ...buildEmptyTable2Verified(backendKeys),
@@ -399,6 +432,65 @@ export default function HODDashboard() {
     );
   };
 
+  const updateBatch = (id, field, value) => {
+    setBatchState((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleBatchApprove = async (sub, teachingGrade, activityGrade, rowRemarks) => {
+    if (!teachingGrade || !activityGrade) {
+      alert("Please set both grades before approving.");
+      return;
+    }
+
+    try {
+      if (sub.status === "SUBMITTED") {
+        await API.post(`hod/appraisal/${sub.appraisal_id}/start-review/`);
+      }
+      await API.post(`hod/appraisal/${sub.appraisal_id}/verify-grade/`, {
+        table1_verified_teaching: teachingGrade,
+        table1_verified_activities: activityGrade,
+        table2_verified_scores: {},
+        hod_remarks: rowRemarks,
+        hod_comments_table1: "",
+        hod_comments_table2: "",
+        hod_justification_not_satisfactory: "",
+      });
+      await API.post(`hod/appraisal/${sub.appraisal_id}/approve/`, {
+        table1_verified_teaching: teachingGrade,
+        table1_verified_activities: activityGrade,
+        table2_verified_scores: {},
+        hod_remarks: rowRemarks,
+      });
+      notifyAppraisalStatusChanged();
+      await refreshDashboardData();
+    } catch (err) {
+      console.error(err);
+      alert("Batch approval failed");
+    }
+  };
+
+  const handleBatchReturn = async (sub, rowRemarks) => {
+    if (!rowRemarks.trim()) {
+      alert("Remarks required before returning.");
+      return;
+    }
+
+    try {
+      await API.post(`hod/appraisal/${sub.appraisal_id}/return/`, { remarks: rowRemarks });
+      notifyAppraisalStatusChanged();
+      await refreshDashboardData();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to return appraisal");
+    }
+  };
+
   const selfTeaching = deriveSelfTeaching(
     selectedSubmission?.sppu_review_data,
     selectedSubmission?.appraisal_data
@@ -583,6 +675,11 @@ export default function HODDashboard() {
                     </div>
                   </div>
                   <div className="review-panel-body">
+                    {table1VerifiedTeaching && (
+                      <div className="review-suggestion-banner">
+                        Score suggests: <strong>{table1VerifiedTeaching}</strong> - verify or change below.
+                      </div>
+                    )}
                     <div className="review-grade-block">
                       <div className="review-grade-copy">
                         <h3>Table 1 - Teaching (Verified Grade)</h3>
@@ -775,6 +872,25 @@ export default function HODDashboard() {
                   {isSavingVerification ? "Saving..." : "Save Verified Grading"}
                 </button>
               )}
+              {(selectedSubmission.status === "SUBMITTED" || selectedSubmission.status === "REVIEWED_BY_HOD") && (
+                <button
+                  className="approve-btn"
+                  onClick={async () => {
+                    const confirmed = window.confirm(
+                      `Quick approve for ${selectedSubmission.faculty_name}? Grade: ${table1VerifiedTeaching}`
+                    );
+                    if (!confirmed) return;
+                    if (selectedSubmission.status === "SUBMITTED") {
+                      await API.post(`hod/appraisal/${selectedSubmission.appraisal_id}/start-review/`);
+                      setSelectedSubmission((prev) => ({ ...prev, status: "REVIEWED_BY_HOD" }));
+                    }
+                    const saved = await handleSaveVerifiedGrading();
+                    if (saved) await handleApprove();
+                  }}
+                >
+                  Quick Approve
+                </button>
+              )}
               {selectedSubmission.status === "REVIEWED_BY_HOD" && (
                 <button className="approve-btn" onClick={handleApprove}>
                   Approve
@@ -893,6 +1009,9 @@ export default function HODDashboard() {
                   <button className={activeTab === "pending" ? "tab active" : "tab"} onClick={() => setActiveTab("pending")}>
                     Pending
                   </button>
+                  <button className={activeTab === "batch" ? "tab active" : "tab"} onClick={() => setActiveTab("batch")}>
+                    Batch Review ({pendingCount})
+                  </button>
                   <button className={activeTab === "processed" ? "tab active" : "tab"} onClick={() => setActiveTab("processed")}>
                     Processed
                   </button>
@@ -948,6 +1067,107 @@ export default function HODDashboard() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {activeTab === "batch" && (
+                <div className="hod-batch-panel">
+                  {loading && <p>Loading appraisals...</p>}
+                  {error && <p className="error">{error}</p>}
+                  {!loading && submissions.pending.length === 0 && <p>No pending appraisals.</p>}
+                  {!loading && submissions.pending.length > 0 && (
+                    <div className="hod-batch-table-wrap">
+                      <table className="hod-batch-table">
+                        <thead>
+                          <tr>
+                            <th>Faculty</th>
+                            <th>Score</th>
+                            <th>Teaching</th>
+                            <th>Activity</th>
+                            <th>Remarks</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {submissions.pending.map((sub) => {
+                            const state = batchState[sub.appraisal_id] || {};
+                            const score =
+                              sub.calculated_total_score === null || sub.calculated_total_score === undefined
+                                ? "-"
+                                : Number(sub.calculated_total_score).toFixed(2);
+
+                            return (
+                              <tr key={sub.appraisal_id}>
+                                <td>
+                                  <strong>{sub.faculty_name}</strong>
+                                  <span>{sub.department} | AY {sub.academic_year}</span>
+                                </td>
+                                <td>
+                                  <span className="hod-batch-score">{score}</span>
+                                </td>
+                                <td>
+                                  <select
+                                    className="hod-batch-select"
+                                    value={state.teachingGrade || ""}
+                                    onChange={(e) => updateBatch(sub.appraisal_id, "teachingGrade", e.target.value)}
+                                  >
+                                    <option value="Good">Good</option>
+                                    <option value="Satisfactory">Satisfactory</option>
+                                    <option value="Not Satisfactory">Not Satisfactory</option>
+                                  </select>
+                                </td>
+                                <td>
+                                  <select
+                                    className="hod-batch-select"
+                                    value={state.activityGrade || ""}
+                                    onChange={(e) => updateBatch(sub.appraisal_id, "activityGrade", e.target.value)}
+                                  >
+                                    <option value="Good">Good</option>
+                                    <option value="Satisfactory">Satisfactory</option>
+                                    <option value="Not Satisfactory">Not Satisfactory</option>
+                                  </select>
+                                </td>
+                                <td>
+                                  <textarea
+                                    className="hod-batch-remarks"
+                                    rows={2}
+                                    value={state.remarks || ""}
+                                    onChange={(e) => updateBatch(sub.appraisal_id, "remarks", e.target.value)}
+                                    placeholder="HOD remarks"
+                                  />
+                                </td>
+                                <td>
+                                  <div className="hod-batch-actions">
+                                    <button
+                                      type="button"
+                                      className="approve-btn"
+                                      onClick={() =>
+                                        handleBatchApprove(
+                                          sub,
+                                          state.teachingGrade,
+                                          state.activityGrade,
+                                          state.remarks || ""
+                                        )
+                                      }
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="reject-btn"
+                                      onClick={() => handleBatchReturn(sub, state.remarks || "")}
+                                    >
+                                      Return
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 

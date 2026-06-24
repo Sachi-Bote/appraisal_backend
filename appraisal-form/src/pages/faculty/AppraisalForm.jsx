@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API from "../../api";
 import "../../styles/AppraisalForm.css";
@@ -161,6 +161,22 @@ const EDITABLE_APPRAISAL_STATES = new Set([
   "CHANGES_REQUESTED",
 ]);
 
+const RESEARCH_SECTIONS = [
+  "papers",
+  "publications",
+  "projects",
+  "patents",
+  "guidance",
+  "pedagogy",
+  "curriculum",
+  "moocsIct",
+  "eContent",
+  "consultancy",
+  "policyDocument",
+  "awards",
+  "invitedTalks",
+];
+
 const RESEARCH_PAPER_IMPACT_FACTOR_OPTIONS = [
   {
     value: "without_impact_factor",
@@ -220,6 +236,69 @@ function getDateInputValue(value) {
   return "";
 }
 
+function Toast({ message, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 2800);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <div className="appraisal-toast" role="status" aria-live="polite">
+      {message}
+    </div>
+  );
+}
+
+function ActivitySearchPicker({ value, onSelect, flatActivityIndex }) {
+  const [query, setQuery] = useState(value || "");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setQuery(value || "");
+  }, [value]);
+
+  const results = query.length >= 2
+    ? flatActivityIndex
+      .filter((a) => a.label.toLowerCase().includes(query.toLowerCase()))
+      .slice(0, 8)
+    : [];
+
+  return (
+    <div className="activity-search-picker">
+      <input
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Type to search activity (e.g. NBA, Lab In charge)..."
+      />
+      {open && results.length > 0 && (
+        <div className="activity-search-dropdown">
+          {results.map((a, i) => (
+            <div
+              key={`${a.section_key}-${a.label}-${i}`}
+              className="activity-search-option"
+              onMouseDown={() => {
+                onSelect(a);
+                setQuery(a.label);
+                setOpen(false);
+              }}
+            >
+              <span className="activity-search-label">{a.label}</span>
+              <span className={`activity-scope-badge scope-${a.scope}`}>
+                {a.scope === "departmental" ? "Dept" : a.scope === "society" ? "Society" : "Inst"} - max {a.maxCredit}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function FacultyAppraisalForm() {
   const CURRENT_ACADEMIC_YEAR = getCurrentAcademicYear();
@@ -261,6 +340,8 @@ export default function FacultyAppraisalForm() {
   const [activitySections, setActivitySections] = useState(
     normalizeActivitySections(DEFAULT_SPPU_ACTIVITY_SECTIONS)
   );
+  const [toastMsg, setToastMsg] = useState("");
+  const showToast = (msg) => setToastMsg(msg);
   //new added
   const [departmentalActivities, setDepartmentalActivities] = useState([
     {
@@ -433,6 +514,22 @@ export default function FacultyAppraisalForm() {
 
   const getDepartmentPerActivityLimit = () => 3;
   const getSocietyPerActivityLimit = () => 5;
+
+  const flatActivityIndex = useMemo(() =>
+    activitySections.flatMap((section) =>
+      section.activities_with_scope.map((item) => ({
+        label: item.label,
+        section_key: section.section_key,
+        section_label: section.label,
+        scope: item.scope,
+        maxCredit: item.scope === "departmental"
+          ? getDepartmentPerActivityLimit(item.label)
+          : item.scope === "society"
+            ? getSocietyPerActivityLimit(item.label)
+            : getInstitutePerActivityLimit(item.label),
+      }))
+    ),
+  [activitySections]);
 
 
 
@@ -822,6 +919,13 @@ export default function FacultyAppraisalForm() {
     eligibilityDate: "",
     academicYear: CURRENT_ACADEMIC_YEAR
   });
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [step1EditMode, setStep1EditMode] = useState(false);
+  const [collapsedResearch, setCollapsedResearch] = useState(
+    RESEARCH_SECTIONS.reduce((acc, k) => ({ ...acc, [k]: true }), {})
+  );
+  const toggleResearchSection = (key) =>
+    setCollapsedResearch((prev) => ({ ...prev, [key]: !prev[key] }));
 
 
   useEffect(() => {
@@ -844,6 +948,7 @@ export default function FacultyAppraisalForm() {
           eligibilityDate: (data.eligibility_date || "").toString().split("T")[0],
           academicYear: isForcedNew && forcedAy ? forcedAy : prev.academicYear
         }));
+        setProfileLoaded(true);
       })
       .catch(err => console.error("Failed to fetch profile", err));
 
@@ -1435,7 +1540,7 @@ export default function FacultyAppraisalForm() {
         setFormStatus(normalizeFormStatus(currentState));
       }
 
-      if (!silent) alert("Saved successfully");
+      if (!silent) showToast("Draft saved");
       return savedAppraisalId;
     } catch (error) {
       console.error(error);
@@ -1675,9 +1780,7 @@ export default function FacultyAppraisalForm() {
   const showValidationSummary = (validationErrors) => {
     const messages = Object.values(validationErrors || {}).filter(Boolean);
     if (!messages.length) return;
-    const preview = messages.slice(0, 5).join("\n- ");
-    const suffix = messages.length > 5 ? "\n- ..." : "";
-    alert(`Please fill required fields:\n- ${preview}${suffix}`);
+    showToast("Please review the highlighted fields.");
   };
 
   const buildResearchEntries = () => {
@@ -2290,6 +2393,32 @@ export default function FacultyAppraisalForm() {
     (sum, list) => sum + (Array.isArray(list) ? list.filter((row) => Object.values(row || {}).some(Boolean)).length : 0),
     0
   );
+  const getResearchSectionCount = (key) => {
+    const list = research?.[key];
+    if (!Array.isArray(list)) return 0;
+    return list.filter((row) => Object.values(row || {}).some(Boolean)).length;
+  };
+  const renderResearchSection = (key, title, children) => {
+    const count = getResearchSectionCount(key);
+    return (
+      <div className="research-section-wrap">
+        <button
+          type="button"
+          className="research-section-toggle"
+          onClick={() => toggleResearchSection(key)}
+        >
+          <span>{title}</span>
+          <span className="research-section-meta">{count > 0 ? `${count} added` : "none"}</span>
+          <span className="research-toggle-icon">{collapsedResearch[key] ? ">" : "v"}</span>
+        </button>
+        {!collapsedResearch[key] && (
+          <div className="research-section-body">
+            {children}
+          </div>
+        )}
+      </div>
+    );
+  };
   const step5Checklist = [
     { label: "Draft saved", done: true },
     { label: "SPPU preview ready", done: true },
@@ -2312,6 +2441,7 @@ export default function FacultyAppraisalForm() {
   /* ================= RENDER ================= */
   return (
     <div className="appraisal-shell">
+      {toastMsg && <Toast message={toastMsg} onDone={() => setToastMsg("")} />}
       <nav className="appraisal-topnav">
         <div className="appraisal-nav-brand">
           <div className="appraisal-nav-icon">
@@ -2323,6 +2453,8 @@ export default function FacultyAppraisalForm() {
           <div>
             <div className="appraisal-nav-title">Staff Appraisal System</div>
           </div>
+          </>
+          )}
         </div>
 
         <div className="appraisal-nav-links">
@@ -2423,6 +2555,52 @@ export default function FacultyAppraisalForm() {
       {currentStep === 1 && (
         <div className="form-section">
           <h3>Step 1: General Information</h3>
+          {profileLoaded && !step1EditMode ? (
+            <div className="profile-confirm-card">
+              <div className="profile-confirm-banner">
+                We pre-filled your details from your profile. Review and continue.
+              </div>
+              <div className="profile-confirm-grid">
+                {[
+                  ["Faculty Name", generalInfo.facultyName],
+                  ["Designation", generalInfo.designation],
+                  ["Department", generalInfo.department],
+                  ["Email", generalInfo.email],
+                  ["Mobile", generalInfo.mobile],
+                  ["Date of Joining", generalInfo.dateOfJoining],
+                  ["Current Designation", generalInfo.currentDesignation],
+                  ["Pay Level", generalInfo.payLevel],
+                  ["Academic Year", generalInfo.academicYear],
+                ].map(([label, val]) => (
+                  <div className="confirm-field" key={label}>
+                    <span className="confirm-label">{label}</span>
+                    <span className="confirm-value">{val || "-"}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn-outline" onClick={() => setStep1EditMode(true)}>
+                  Edit Details
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    const errs = validateStep1();
+                    if (Object.keys(errs).length === 0) {
+                      handleSaveAndNext();
+                    } else {
+                      setStep1EditMode(true);
+                      showValidationSummary(errs);
+                    }
+                  }}
+                >
+                  Confirm & Continue
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           <fieldset
             disabled={isFormLocked}
             style={{ border: "none", padding: 0 }}
@@ -2804,7 +2982,6 @@ export default function FacultyAppraisalForm() {
               </p>
 
               {step2bActivities.map((row, index) => {
-                const activityOptions = getSectionActivities(row.section_key);
                 const maxCredit = getMaxCreditForSelection(row.section_key, row.activity, row.activityType);
                 const mappedScope = getScopeForSelection(row.section_key, row.activity || row.otherActivity, row.activityType);
                 const scopeLabel = getScopeLabel(mappedScope);
@@ -2813,68 +2990,25 @@ export default function FacultyAppraisalForm() {
                 return (
                   <div className="activity-card" key={row.id || index}>
                     <div className="activity-row">
-                      <select
-                        value={row.section_key}
-                        onChange={(e) => {
-                          const section_key = e.target.value;
-                          setStep2bActivities((prev) => {
-                            const copy = [...prev];
-                            const next = { ...copy[index] };
-                            next.section_key = section_key;
-                            next.activity = "";
-                            next.credit = "";
-                            copy[index] = next;
-                            return copy;
-                          });
-                        }}
-                      >
-                        <option value="">Select Source Activity</option>
-                        {STEP2_SOURCE_ACTIVITY_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-
-                      <select
+                      <ActivitySearchPicker
                         value={row.activity}
-                        disabled={!row.section_key}
-                        onChange={(e) => {
-                          const activity = e.target.value;
+                        flatActivityIndex={flatActivityIndex}
+                        onSelect={(selected) => {
                           setStep2bActivities((prev) => {
                             const copy = [...prev];
-                            const next = { ...copy[index] };
-                            next.activity = activity;
-                            const nextMax = getMaxCreditForSelection(next.section_key, activity, next.activityType);
-                            if (!next.credit || Number(next.credit) <= 0) {
-                              next.credit = nextMax > 0 ? String(nextMax) : "";
-                            }
-                            copy[index] = next;
+                            copy[index] = {
+                              ...copy[index],
+                              section_key: selected.section_key,
+                              activity: selected.label,
+                              activityType: selected.scope === "institute" ? "institutional" : selected.scope,
+                              credit: String(selected.maxCredit),
+                              otherActivity: "",
+                              isInvolved: "Yes",
+                            };
                             return copy;
                           });
                         }}
-                      >
-                        <option value="">Select Activity</option>
-                        {activityOptions.map((act, i) => (
-                          <option key={row.section_key + "_" + i} value={act}>{act}</option>
-                        ))}
-                      </select>
-
-                      <select
-                        value={row.isInvolved}
-                        onChange={(e) => {
-                          const isInvolved = e.target.value;
-                          setStep2bActivities((prev) => {
-                            const copy = [...prev];
-                            copy[index] = { ...copy[index], isInvolved: "Yes" };
-                            return copy;
-                          });
-                          if (isInvolved !== "Yes") {
-                            alert("All Step 2B rows are treated as included for mapping. 'No' is ignored.");
-                          }
-                        }}
-                      >
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </select>
+                      />
 
                       <input
                         type="number"
@@ -3213,6 +3347,8 @@ export default function FacultyAppraisalForm() {
               style={{ border: "none", padding: 0 }}
             >
               {/* ========== 1. RESEARCH PAPERS ========== */}
+              {renderResearchSection("papers", "1. Research Papers", (
+                <>
               <h4>1. (*) Research Papers in Peer-Reviewed or UGC listed Journals</h4>
               <p className="section-note">
                 Base Score: 08 pts &nbsp;|&nbsp; IF Bonus: &lt;1: +5, 1–2: +10, 2–5: +15, 5–10: +20, &gt;10: +25
@@ -3280,10 +3416,14 @@ export default function FacultyAppraisalForm() {
               }>
                 + Add Paper
               </button>
+                </>
+              ))}
 
               <hr />
 
               {/* ========== 2. PUBLICATIONS ========== */}
+              {renderResearchSection("publications", "2. Publications", (
+                <>
               <h4>2. Publication (other than Research Papers)</h4>
               <p className="section-note">
                 (a) Books authored &amp; Chapters — International publisher: 12 pts &nbsp;|&nbsp; National: 10 pts &nbsp;|&nbsp;
@@ -3363,10 +3503,14 @@ export default function FacultyAppraisalForm() {
               }>
                 + Add Publication
               </button>
+                </>
+              ))}
 
               <hr />
 
               {/* ========== 3. RESEARCH PROJECTS ========== */}
+              {renderResearchSection("projects", "3. Research Projects", (
+                <>
               <h4>3. Research Projects</h4>
               <p className="section-note">
                 Completed — &gt;10 Lakhs: 10 pts &nbsp;|&nbsp; &lt;10 Lakhs: 05 pts
@@ -3422,10 +3566,14 @@ export default function FacultyAppraisalForm() {
               }>
                 + Add Project
               </button>
+                </>
+              ))}
 
               <hr />
 
               {/* ========== 4. PATENTS ========== */}
+              {renderResearchSection("patents", "4. Patents", (
+                <>
               <h4>4. Patents</h4>
               <p className="section-note">
                 International — 10 pts &nbsp;|&nbsp; National — 07 pts
@@ -3468,9 +3616,13 @@ export default function FacultyAppraisalForm() {
               }>
                 + Add Patent
               </button>
+                </>
+              ))}
 
               <hr />
               {/* ========== 5. RESEARCH GUIDANCE ========== */}
+              {renderResearchSection("guidance", "5. Research Guidance", (
+                <>
               <h4>5. Research Guidance</h4>
               <p className="section-note">
                 Ph.D. — 10 pts per degree awarded &nbsp;|&nbsp; 05 pts per thesis submitted
@@ -3552,6 +3704,8 @@ export default function FacultyAppraisalForm() {
               >
                 + Add Research Guidance
               </button>
+                </>
+              ))}
               <hr />
 
               {/* ========== 6. ICT / PEDAGOGY / MOOCs / E-CONTENT ========== */}
@@ -3561,6 +3715,8 @@ export default function FacultyAppraisalForm() {
               </h4>
 
               {/* ---- 6(a) Pedagogy Development ---- */}
+              {renderResearchSection("pedagogy", "6(a). Pedagogy Development", (
+                <>
               <p className="section-note">
                 (a) Development of Innovative Pedagogy — 05 points each
               </p>
@@ -3590,8 +3746,12 @@ export default function FacultyAppraisalForm() {
               <button className="btn-add" onClick={() => addResearchRow("pedagogy", { title: "", year: "", enclosureNo: "" })}>
                 + Add Pedagogy Entry
               </button>
+                </>
+              ))}
 
               {/* ---- 6(b) Design of New Curricula and Courses ---- */}
+              {renderResearchSection("curriculum", "6(b). Curricula and Courses", (
+                <>
               <p className="section-note">
                 (b) Design of new curricula and courses — 02 points per curricula/course
               </p>
@@ -3629,8 +3789,12 @@ export default function FacultyAppraisalForm() {
               <button className="btn-add" onClick={() => addResearchRow("curriculum", { type: "", title: "", year: "", enclosureNo: "" })}>
                 + Add Curricula / Course Entry
               </button>
+                </>
+              ))}
 
               {/* ---- 6(c) MOOCs ---- */}
+              {renderResearchSection("moocsIct", "6(c). MOOCs / ICT", (
+                <>
               <p className="section-note">
                 (c) MOOCs — 20 pts (Complete) | 08 pts (Coordinator) | 05 pts (Module) | 02 pts (Content)
               </p>
@@ -3673,8 +3837,12 @@ export default function FacultyAppraisalForm() {
               <button className="btn-add" onClick={() => addResearchRow("moocsIct", { role: "", quadrants: "", year: "", enclosureNo: "" })}>
                 + Add MOOCs Entry
               </button>
+                </>
+              ))}
 
               {/* ---- 6(d) E-Content ---- */}
+              {renderResearchSection("eContent", "6(d). E-Content", (
+                <>
               <p className="section-note">
                 (d) E-Content — 12 pts (Complete) | 10 pts (Editor) | 05 pts (Module) | 02 pts (Contribution)
               </p>
@@ -3709,10 +3877,14 @@ export default function FacultyAppraisalForm() {
               <button className="btn-add" onClick={() => addResearchRow("eContent", { role: "", year: "", enclosureNo: "" })}>
                 + Add E-Content Entry
               </button>
+                </>
+              ))}
 
               <hr />
 
               {/* ========== 7. CONSULTANCY ========== */}
+              {renderResearchSection("consultancy", "7. Consultancy", (
+                <>
               <h4>7. Consultancy</h4>
               <p className="section-note">
                 03 points each
@@ -3743,10 +3915,14 @@ export default function FacultyAppraisalForm() {
               <button className="btn-add" onClick={() => addResearchRow("consultancy", { amount: "", year: "", enclosureNo: "" })}>
                 + Add Consultancy Entry
               </button>
+                </>
+              ))}
 
               <hr />
 
               {/* ========== 8. POLICY DOCUMENT ========== */}
+              {renderResearchSection("policyDocument", "8. Policy Document", (
+                <>
               <h4 style={{ lineHeight: 1.4 }}>
                 8. *Policy Document (Submitted to an International body/organization
                 like UNO/UNESCO/World Bank/International Monetary Fund etc. or
@@ -3780,10 +3956,14 @@ export default function FacultyAppraisalForm() {
               <button className="btn-add" onClick={() => addResearchRow("policyDocument", { level: "", enclosureNo: "" })}>
                 + Add Policy Document Entry
               </button>
+                </>
+              ))}
 
               <hr />
 
               {/* ========== 9. AWARDS / FELLOWSHIP ========== */}
+              {renderResearchSection("awards", "9. Awards / Fellowship", (
+                <>
               <h4>9. Awards / Fellowship</h4>
               <p className="section-note">
                 International — 07 pts &nbsp;|&nbsp; National — 05 pts
@@ -3823,10 +4003,14 @@ export default function FacultyAppraisalForm() {
               >
                 + Add Award / Fellowship
               </button>
+                </>
+              ))}
 
               <hr />
 
               {/* ========== 10. INVITED LECTURES ========== */}
+              {renderResearchSection("invitedTalks", "10. Invited Lectures", (
+                <>
               <h4 style={{ lineHeight: 1.5 }}>
                 10. Invited lectures / Resource Person / paper presentation in
                 Seminars / Conferences / full paper in Conference Proceeding
@@ -3889,6 +4073,8 @@ export default function FacultyAppraisalForm() {
               >
                 + Add Invited Lecture / Resource Person
               </button>
+                </>
+              ))}
 
 
 
